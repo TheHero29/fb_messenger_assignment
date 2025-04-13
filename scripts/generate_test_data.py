@@ -35,25 +35,38 @@ def connect_to_cassandra():
         raise
 
 def generate_test_data(session):
-    """
-    Generate test data in Cassandra.
-    
-    Students should implement this function to generate test data based on their schema design.
-    The function should create:
-    - Users (with IDs 1-NUM_USERS)
-    - Conversations between random pairs of users
-    - Messages in each conversation with realistic timestamps
-    """
     logger.info("Generating test data...")
-    
-    # TODO: Students should implement the test data generation logic
-    # Hint:
-    # 1. Create a set of user IDs
-    # 2. Create conversations between random pairs of users
-    # 3. For each conversation, generate a random number of messages
-    # 4. Update relevant tables to maintain data consistency
-    
-    logger.info(f"Generated {NUM_CONVERSATIONS} conversations with messages")
+
+    user_ids = [uuid.uuid4() for _ in range(NUM_USERS)]
+    conversations = []
+
+    for _ in range(NUM_CONVERSATIONS):
+        user_a, user_b = random.sample(user_ids, 2)
+        conversation_id = uuid.uuid4()
+        conversations.append((conversation_id, user_a, user_b))
+
+        num_messages = random.randint(10, MAX_MESSAGES_PER_CONVERSATION)
+        base_time = datetime.utcnow()
+
+        for i in range(num_messages):
+            msg_time = base_time - timedelta(seconds=i * 60)
+            sender = random.choice([user_a, user_b])
+            content = f"Test message {i} from {sender}"
+
+            # Insert into messages_by_conversation
+            session.execute("""
+                INSERT INTO messages_by_conversation (conversation_id, message_ts, sender_id, content)
+                VALUES (%s, %s, %s, %s)
+            """, (conversation_id, msg_time, sender, content))
+
+        # Insert into conversations_by_user for both participants
+        for user, peer in [(user_a, user_b), (user_b, user_a)]:
+            session.execute("""
+                INSERT INTO conversations_by_user (user_id, last_message_ts, conversation_id, peer_id)
+                VALUES (%s, %s, %s, %s)
+            """, (user, base_time, conversation_id, peer))
+
+    logger.info(f"Generated {len(conversations)} conversations with messages")
     logger.info(f"User IDs range from 1 to {NUM_USERS}")
     logger.info("Use these IDs for testing the API endpoints")
 

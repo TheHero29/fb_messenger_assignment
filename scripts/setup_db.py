@@ -22,13 +22,13 @@ def wait_for_cassandra():
     
     for _ in range(10):  # Try 10 times
         try:
-            cluster = Cluster([CASSANDRA_HOST])
+            cluster = Cluster([CASSANDRA_HOST], port=CASSANDRA_PORT)
             session = cluster.connect()
             logger.info("Cassandra is ready!")
             return cluster
         except Exception as e:
             logger.warning(f"Cassandra not ready yet: {str(e)}")
-            time.sleep(5)  # Wait 5 seconds before trying again
+            time.sleep(5)
     
     logger.error("Failed to connect to Cassandra after multiple attempts.")
     raise Exception("Could not connect to Cassandra")
@@ -36,48 +36,55 @@ def wait_for_cassandra():
 def create_keyspace(session):
     """
     Create the keyspace if it doesn't exist.
-    
-    This is where students will define the keyspace configuration.
     """
     logger.info(f"Creating keyspace {CASSANDRA_KEYSPACE} if it doesn't exist...")
     
-    # TODO: Students should implement keyspace creation
-    # Hint: Consider replication strategy and factor for a distributed database
+    session.execute(f"""
+        CREATE KEYSPACE IF NOT EXISTS {CASSANDRA_KEYSPACE}
+        WITH replication = {{ 'class': 'SimpleStrategy', 'replication_factor': '1' }};
+    """)
     
     logger.info(f"Keyspace {CASSANDRA_KEYSPACE} is ready.")
 
 def create_tables(session):
     """
     Create the tables for the application.
-    
-    This is where students will define the table schemas based on the requirements.
     """
     logger.info("Creating tables...")
-    
-    # TODO: Students should implement table creation
-    # Hint: Consider:
-    # - What tables are needed to implement the required APIs?
-    # - What should be the primary keys and clustering columns?
-    # - How will you handle pagination and time-based queries?
-    
+
+    session.execute("""
+        CREATE TABLE IF NOT EXISTS messages_by_conversation (
+            conversation_id UUID,
+            message_ts TIMESTAMP,
+            sender_id UUID,
+            content TEXT,
+            PRIMARY KEY (conversation_id, message_ts)
+        ) WITH CLUSTERING ORDER BY (message_ts DESC);
+    """)
+
+    session.execute("""
+        CREATE TABLE IF NOT EXISTS conversations_by_user (
+            user_id UUID,
+            last_message_ts TIMESTAMP,
+            conversation_id UUID,
+            peer_id UUID,
+            PRIMARY KEY (user_id, last_message_ts)
+        ) WITH CLUSTERING ORDER BY (last_message_ts DESC);
+    """)
+
     logger.info("Tables created successfully.")
 
 def main():
     """Initialize the database."""
     logger.info("Starting Cassandra initialization...")
     
-    # Wait for Cassandra to be ready
     cluster = wait_for_cassandra()
     
     try:
-        # Connect to the server
         session = cluster.connect()
-        
-        # Create keyspace and tables
         create_keyspace(session)
         session.set_keyspace(CASSANDRA_KEYSPACE)
         create_tables(session)
-        
         logger.info("Cassandra initialization completed successfully.")
     except Exception as e:
         logger.error(f"Error during initialization: {str(e)}")
@@ -87,4 +94,4 @@ def main():
             cluster.shutdown()
 
 if __name__ == "__main__":
-    main() 
+    main()
